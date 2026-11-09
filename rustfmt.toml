@@ -1,0 +1,7 @@
+unstable_features = true
+
+imports_granularity = "Module"
+
+hex_literal_case = "Upper"
+struct_field_align_threshold = 20
+enum_discrim_align_threshold = 20
