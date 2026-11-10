@@ -1,4 +1,4 @@
-use std::io::{Error, Result};
+use std::io;
 use std::net::SocketAddr;
 
 use bytes::{Buf as _, Bytes, BytesMut};
@@ -15,9 +15,11 @@ use windows::Win32::NetworkManagement::IpHelper::{
     CreateUnicastIpAddressEntry, InitializeUnicastIpAddressEntry, MIB_UNICASTIPADDRESS_ROW,
 };
 
-use crate::{hexdump, socket};
+use crate::{jam, socket};
 
-pub async fn proxy(addr: SocketAddr, keys: [[u8; 64]; 4]) {
+pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
+    let protocols = jam::schema::parse(&std::fs::read_to_string("research/jam.xml").unwrap());
+
     let mut row = MIB_UNICASTIPADDRESS_ROW::default();
     unsafe {
         InitializeUnicastIpAddressEntry(&mut row);
@@ -30,7 +32,6 @@ pub async fn proxy(addr: SocketAddr, keys: [[u8; 64]; 4]) {
     };
 
     let listener = TcpListener::bind(addr).await.unwrap();
-
     tokio::spawn(async move {
         let (mut client, _) = listener.accept().await.unwrap();
         let mut server = socket().connect(addr).await.unwrap();
@@ -42,6 +43,10 @@ pub async fn proxy(addr: SocketAddr, keys: [[u8; 64]; 4]) {
         assert_eq!(&hello, b"HELLO PRO SERVER\0");
 
         let client_challenge = forward::<40>(&mut client, &mut server).await;
+        assert_eq!(
+            u64::from_le_bytes(client_challenge[..8].try_into().unwrap()),
+            cid
+        );
         let client_nonce = &client_challenge[8..];
 
         let server_challenge = forward::<65>(&mut server, &mut client).await;
@@ -50,8 +55,10 @@ pub async fn proxy(addr: SocketAddr, keys: [[u8; 64]; 4]) {
         let server_nonce = &server_challenge[33..];
 
         let client_proof = forward::<40>(&mut client, &mut server).await;
-        let counter = u64::from_le_bytes(client_proof[..8].try_into().unwrap());
-        assert_eq!(counter, pow(challenge, difficulty));
+        assert_eq!(
+            u64::from_le_bytes(client_proof[..8].try_into().unwrap()),
+            pow(challenge, difficulty)
+        );
         assert_eq!(
             &client_proof[8..],
             hmac_sha256(&keys[0], &[client_nonce, server_nonce]).as_slice()
@@ -73,11 +80,7 @@ pub async fn proxy(addr: SocketAddr, keys: [[u8; 64]; 4]) {
 
         let mut bytes = [0; 467];
         server.read_exact(&mut bytes).await.unwrap();
-
         s2c_decryptor.apply_keystream(&mut bytes);
-        println!("S → C");
-        hexdump(&bytes);
-
         s2c_encryptor.apply_keystream(&mut bytes);
         client.write_all(&bytes).await.unwrap();
 
@@ -102,26 +105,43 @@ pub async fn proxy(addr: SocketAddr, keys: [[u8; 64]; 4]) {
         let (mut client_tx, mut client_rx) = client.split();
         let (mut server_tx, mut server_rx) = server.split();
 
-        tokio::select! {
-            _ = async {
-                while let Some(bytes) = client_rx.next().await {
-                    let bytes = bytes.unwrap();
-                    println!("C → S ({} bytes)", bytes.len());
-                    hexdump(&bytes);
-
-                    server_tx.send(bytes).await.unwrap();
+        loop {
+            let (bytes, server) = tokio::select! {
+                packet = client_rx.next() => {
+                    let Some(packet) = packet else { break };
+                    (packet.unwrap(), false)
                 }
-            } => {},
-
-            _ = async {
-                while let Some(bytes) = server_rx.next().await {
-                    let bytes = bytes.unwrap();
-                    println!("S → C ({} bytes)", bytes.len());
-                    hexdump(&bytes);
-
-                    client_tx.send(bytes).await.unwrap();
+                packet = server_rx.next() => {
+                    let Some(packet) = packet else { break };
+                    (packet.unwrap(), true)
                 }
-            } => {},
+            };
+
+            let mut buf = &bytes[..];
+
+            let channel_id = buf.get_u8();
+            let message_type = buf.get_u8();
+
+            if channel_id != 0 {
+                if let Some(protocol) = protocols.get(channel_id as usize - 1) {
+                    if let Some(message_type) = protocol.messages.get(message_type as usize) {
+                        if let Ok(message) = jam::decode(&message_type, &mut buf) {
+                            println!(
+                                "{} {} {:?}",
+                                if server { "S → C" } else { "C → S" },
+                                message_type.id,
+                                message
+                            );
+                        }
+                    }
+                }
+            }
+
+            if server {
+                client_tx.send(bytes).await.unwrap();
+            } else {
+                server_tx.send(bytes).await.unwrap();
+            }
         }
     });
 }
@@ -161,9 +181,9 @@ pub struct LobbyCodec {
 }
 
 impl Encoder<Bytes> for LobbyCodec {
-    type Error = Error;
+    type Error = io::Error;
 
-    fn encode(&mut self, src: Bytes, dst: &mut BytesMut) -> Result<()> {
+    fn encode(&mut self, src: Bytes, dst: &mut BytesMut) -> io::Result<()> {
         let start = dst.len();
 
         dst.reserve(3 + src.len());
@@ -179,9 +199,9 @@ impl Encoder<Bytes> for LobbyCodec {
 
 impl Decoder for LobbyCodec {
     type Item = Bytes;
-    type Error = Error;
+    type Error = io::Error;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Bytes>> {
+    fn decode(&mut self, src: &mut BytesMut) -> io::Result<Option<Bytes>> {
         self.decryptor.apply_keystream(&mut src[self.decrypted..]);
         self.decrypted = src.len();
 

@@ -6,19 +6,17 @@ use std::sync::{Arc, Mutex};
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor};
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{TlsAcceptor, rustls};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
 use tokio_tungstenite::tungstenite::{Error as WsError, Message as WsMessage};
 use tokio_tungstenite::{accept_hdr_async, client_async_tls};
-use windows::Win32::NetworkManagement::IpHelper::{
-    CreateUnicastIpAddressEntry, InitializeUnicastIpAddressEntry, MIB_UNICASTIPADDRESS_ROW,
-};
 
-use crate::{lobby, socket};
+use crate::lobby;
 
 const HOST: &str = "eu.actual.battle.net";
+const ADDR: &str = "35.204.119.70:1119";
 const PROTOCOL: &str = "v1.rpc.battle.net";
 
 type Pending = Arc<Mutex<HashMap<(bool, u32), MethodDescriptor>>>;
@@ -59,21 +57,7 @@ pub async fn proxy() {
     )
     .unwrap();
 
-    let addr: SocketAddr = "34.90.185.250:1119".parse().unwrap();
-
-    let mut row = MIB_UNICASTIPADDRESS_ROW::default();
-    unsafe {
-        InitializeUnicastIpAddressEntry(&mut row);
-        row.InterfaceIndex = 1;
-        row.Address = addr.into();
-        row.OnLinkPrefixLength = 32;
-        row.SkipAsSource = true.into();
-
-        let _ = CreateUnicastIpAddressEntry(&row);
-    };
-
-    let listener = TcpListener::bind(addr).await.unwrap();
-
+    let listener = TcpListener::bind("127.0.0.1:1119").await.unwrap();
     loop {
         let (client, _) = listener.accept().await.unwrap();
 
@@ -86,10 +70,8 @@ pub async fn proxy() {
                 .headers_mut()
                 .insert("Sec-WebSocket-Protocol", PROTOCOL.parse().unwrap());
 
-            let (server, response) =
-                client_async_tls(request, socket().connect(addr).await.unwrap())
-                    .await
-                    .unwrap();
+            let server = TcpStream::connect(ADDR).await.unwrap();
+            let (server, response) = client_async_tls(request, server).await.unwrap();
             assert_eq!(
                 response
                     .headers()
@@ -268,6 +250,12 @@ async fn proxy_direction<S, D>(
                             .unwrap()
                     });
 
+                    let cid: u64 = fields["cid"]
+                        .get_field_by_name("uint_value")
+                        .unwrap()
+                        .as_u64()
+                        .unwrap();
+
                     let host: SocketAddr = fields["hostv4"]
                         .get_field_by_name("string_value")
                         .unwrap()
@@ -276,7 +264,7 @@ async fn proxy_direction<S, D>(
                         .parse()
                         .unwrap();
 
-                    lobby::proxy(host, keys).await;
+                    lobby::proxy(host, cid, keys).await;
                 }
             }
         }

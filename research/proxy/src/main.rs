@@ -6,9 +6,10 @@ use tokio::net::TcpSocket;
 use windows::Win32::Networking::WinSock::{IP_UNICAST_IF, IPPROTO_IP, SOCKET, setsockopt};
 
 mod bnet;
+mod jam;
 mod lobby;
 
-const IF: u32 = 6;
+const NET_IF: u32 = 5;
 
 #[tokio::main]
 async fn main() {
@@ -23,7 +24,7 @@ pub fn socket() -> TcpSocket {
                 SOCKET(socket.as_raw_socket() as usize),
                 IPPROTO_IP.0,
                 IP_UNICAST_IF,
-                Some(&IF.to_be_bytes()),
+                Some(&NET_IF.to_be_bytes()),
             ),
             0
         );
