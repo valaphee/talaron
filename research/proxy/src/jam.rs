@@ -3,6 +3,8 @@ use std::{fmt, io};
 
 use bitstream_io::{BitRead, BitReader, LittleEndian};
 
+use crate::FIELD;
+
 pub mod schema;
 
 pub enum Value {
@@ -167,7 +169,7 @@ impl fmt::Debug for Value {
             Value::Struct(v) => {
                 let mut s = f.debug_struct("");
                 for (name, value) in v.iter() {
-                    s.field(&name.to_string(), value);
+                    s.field(&format!("{FIELD}{name}{FIELD:#}"), value);
                 }
                 s.finish()
             }

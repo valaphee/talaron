@@ -1,5 +1,6 @@
 use std::io;
 use std::net::SocketAddr;
+use std::time::Instant;
 
 use bytes::{Buf as _, Bytes, BytesMut};
 use futures_util::{SinkExt, StreamExt};
@@ -15,7 +16,7 @@ use windows::Win32::NetworkManagement::IpHelper::{
     CreateUnicastIpAddressEntry, InitializeUnicastIpAddressEntry, MIB_UNICASTIPADDRESS_ROW,
 };
 
-use crate::{jam, socket};
+use crate::{C2S, S2C, jam, socket};
 
 pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
     let protocols = jam::schema::parse(&std::fs::read_to_string("research/jam.xml").unwrap());
@@ -32,8 +33,11 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
     };
 
     let listener = TcpListener::bind(addr).await.unwrap();
+
     tokio::spawn(async move {
         let (mut client, _) = listener.accept().await.unwrap();
+        let start = Instant::now();
+
         let mut server = socket().connect(addr).await.unwrap();
 
         let hello = forward::<17>(&mut client, &mut server).await;
@@ -128,8 +132,13 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
             let message_type = &protocol.messages[message_type as usize];
             if let Ok(message) = jam::decode(&message_type, &mut buf) {
                 println!(
-                    "{} {} {} {:?}",
-                    if server { "S → C" } else { "C → S" },
+                    "[{:9.3}] {} {} {} {:?}",
+                    start.elapsed().as_secs_f64(),
+                    if server {
+                        format!("{S2C}S → C{S2C:#}")
+                    } else {
+                        format!("{C2S}C → S{C2S:#}")
+                    },
                     protocol.name,
                     message_type.name,
                     message

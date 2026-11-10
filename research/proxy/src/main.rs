@@ -2,6 +2,7 @@
 
 use std::os::windows::io::AsRawSocket as _;
 
+use anstyle::{AnsiColor, Color, Style};
 use tokio::net::TcpSocket;
 use windows::Win32::Networking::WinSock::{IP_UNICAST_IF, IPPROTO_IP, SOCKET, setsockopt};
 
@@ -9,7 +10,11 @@ mod bnet;
 mod jam;
 mod lobby;
 
-const NET_IF: u32 = 5;
+const NET_IF: u32 = 6;
+
+pub const FIELD: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightMagenta)));
+pub const C2S: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightGreen)));
+pub const S2C: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightRed)));
 
 #[tokio::main]
 async fn main() {
@@ -31,31 +36,4 @@ pub fn socket() -> TcpSocket {
     }
 
     socket
-}
-
-fn hexdump(bytes: &[u8]) {
-    for (row, chunk) in bytes.chunks(16).enumerate() {
-        print!("{:08x}  ", row * 16);
-
-        for i in 0..16 {
-            if let Some(byte) = chunk.get(i) {
-                print!("{byte:02x} ");
-            } else {
-                print!("   ");
-            }
-        }
-
-        print!(" |");
-        for &byte in chunk {
-            print!(
-                "{}",
-                if byte.is_ascii_graphic() || byte == b' ' {
-                    byte as char
-                } else {
-                    '.'
-                }
-            );
-        }
-        println!("|");
-    }
 }
