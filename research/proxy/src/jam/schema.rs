@@ -3,6 +3,7 @@ use quick_xml::{Reader, XmlVersion};
 
 pub struct Protocol {
     pub name:     String,
+    pub crc:      u32,
     pub messages: Vec<Message>,
 }
 
@@ -43,6 +44,8 @@ pub fn parse(xml: &str) -> Vec<Protocol> {
 fn parse_protocol(xml: &mut Reader<&[u8]>, e: &BytesStart<'_>) -> Protocol {
     let mut protocol = Protocol {
         name:     attr(e, "Name").unwrap(),
+        crc:      u32::from_str_radix(attr(e, "Crc").unwrap().trim_start_matches("0x"), 16)
+            .unwrap(),
         messages: Vec::new(),
     };
 

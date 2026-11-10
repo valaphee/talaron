@@ -1,3 +1,4 @@
+use std::ops::{Index, IndexMut};
 use std::{fmt, io};
 
 use bitstream_io::{BitRead, BitReader, LittleEndian};
@@ -16,6 +17,140 @@ pub enum Value {
     Struct(Vec<(String, Value)>),
     Object(Vec<u8>),
     Array(Vec<Value>),
+}
+
+impl Value {
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            Self::U8(v) => *v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_u8_mut(&mut self) -> &mut u8 {
+        match self {
+            Self::U8(v) => v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_u16(&self) -> u16 {
+        match self {
+            Self::U16(v) => *v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_u16_mut(&mut self) -> &mut u16 {
+        match self {
+            Self::U16(v) => v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_u32(&self) -> u32 {
+        match self {
+            Self::U32(v) => *v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_u32_mut(&mut self) -> &mut u32 {
+        match self {
+            Self::U32(v) => v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_u64(&self) -> u64 {
+        match self {
+            Self::U64(v) => *v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_u64_mut(&mut self) -> &mut u64 {
+        match self {
+            Self::U64(v) => v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_f32(&self) -> f32 {
+        match self {
+            Self::F32(v) => *v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_f32_mut(&mut self) -> &mut f32 {
+        match self {
+            Self::F32(v) => v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_f64(&self) -> f64 {
+        match self {
+            Self::F64(v) => *v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_f64_mut(&mut self) -> &mut f64 {
+        match self {
+            Self::F64(v) => v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_string(&self) -> &String {
+        match self {
+            Self::String(v) => v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_string_mut(&mut self) -> &mut String {
+        match self {
+            Self::String(v) => v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_slice(&self) -> &[Value] {
+        match self {
+            Self::Array(v) => v.as_slice(),
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [Value] {
+        match self {
+            Self::Array(v) => v.as_mut_slice(),
+            _ => panic!(),
+        }
+    }
+}
+
+impl Index<&str> for Value {
+    type Output = Value;
+
+    fn index(&self, name: &str) -> &Self::Output {
+        match self {
+            Self::Struct(v) => &v.iter().find(|f| f.0 == name).unwrap().1,
+            _ => panic!(),
+        }
+    }
+}
+
+impl IndexMut<&str> for Value {
+    fn index_mut(&mut self, name: &str) -> &mut Self::Output {
+        match self {
+            Self::Struct(v) => &mut v.iter_mut().find(|f| f.0 == name).unwrap().1,
+            _ => panic!(),
+        }
+    }
 }
 
 impl fmt::Debug for Value {

@@ -105,6 +105,8 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
         let (mut client_tx, mut client_rx) = client.split();
         let (mut server_tx, mut server_rx) = server.split();
 
+        let mut channels = vec![protocols.first().unwrap()];
+
         loop {
             let (bytes, server) = tokio::select! {
                 packet = client_rx.next() => {
@@ -122,18 +124,26 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
             let channel_id = buf.get_u8();
             let message_type = buf.get_u8();
 
-            if channel_id != 0 {
-                if let Some(protocol) = protocols.get(channel_id as usize - 1) {
-                    if let Some(message_type) = protocol.messages.get(message_type as usize) {
-                        if let Ok(message) = jam::decode(&message_type, &mut buf) {
-                            println!(
-                                "{} {} {} {:?}",
-                                if server { "S → C" } else { "C → S" },
-                                protocol.name,
-                                message_type.name,
-                                message
-                            );
-                        }
+            let protocol = channels[channel_id as usize];
+            let message_type = &protocol.messages[message_type as usize];
+            if let Ok(message) = jam::decode(&message_type, &mut buf) {
+                println!(
+                    "{} {} {} {:?}",
+                    if server { "S → C" } else { "C → S" },
+                    protocol.name,
+                    message_type.name,
+                    message
+                );
+
+                if message_type.id == 1 {
+                    for protocol_crc in message["0"].as_slice() {
+                        let protocol_crc = protocol_crc.as_u32();
+                        channels.push(
+                            protocols
+                                .iter()
+                                .find(|protocol| protocol.crc == protocol_crc)
+                                .unwrap(),
+                        );
                     }
                 }
             }
