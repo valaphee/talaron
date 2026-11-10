@@ -10,7 +10,7 @@ mod bnet;
 mod jam;
 mod lobby;
 
-const NET_IF: u32 = 6;
+const NET_IF: u32 = 5;
 
 pub const FIELD: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightMagenta)));
 pub const C2S: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightGreen)));

@@ -95,13 +95,11 @@ section = next(
 for pos in range(
     section.PointerToRawData,
     min(section.PointerToRawData + section.SizeOfRawData, len(data)) - 0x20 + 1,
-    8,
+    0x10,
 ):
     message_name, protocol_name, fields, protocol_crc, message_id = struct.unpack_from(
         "<QQQII", data, pos
     )
-    if protocol_crc == 0 or message_id == 0x7FF7:
-        continue
 
     elem = ET.Element(
         "Message", Id=str(message_id), Name=cstring(message_name) or str(message_id)
