@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bitstream-io = "4"
 bytes = "1"
 futures-util = { version = "0.3", features = ["sink"] }
 tokio = { version = "1", features = ["full"] }

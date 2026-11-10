@@ -1,6 +1,6 @@
 use std::{fmt, io};
 
-use bytes::Buf as _;
+use bitstream_io::{BitRead, BitReader, LittleEndian};
 
 pub mod schema;
 
@@ -13,7 +13,7 @@ pub enum Value {
     F32(f32),
     F64(f64),
     String(String),
-    Struct(Vec<Value>),
+    Struct(Vec<(String, Value)>),
     Object(Vec<u8>),
     Array(Vec<Value>),
 }
@@ -31,7 +31,7 @@ impl fmt::Debug for Value {
             Value::String(v) => v.fmt(f),
             Value::Struct(v) => {
                 let mut s = f.debug_struct("");
-                for (name, value) in v.iter().enumerate() {
+                for (name, value) in v.iter() {
                     s.field(&name.to_string(), value);
                 }
                 s.finish()
@@ -49,92 +49,66 @@ impl fmt::Debug for Value {
 }
 
 pub fn decode(message: &schema::Message, buf: &mut &[u8]) -> io::Result<Value> {
-    Ok(Value::Struct(decode_fields(&message.fields, buf)?))
+    let mut reader = BitReader::endian(buf, LittleEndian);
+    Ok(Value::Struct(decode_fields(&message.fields, &mut reader)?))
 }
 
-fn decode_fields(fields: &[schema::Field], buf: &mut &[u8]) -> io::Result<Vec<Value>> {
-    let mut bits = (0, 0);
-
+fn decode_fields(
+    fields: &[schema::Field],
+    reader: &mut impl BitRead,
+) -> io::Result<Vec<(String, Value)>> {
     fields
         .iter()
-        .map(|field| decode_value(&field.r#type, field, buf, &mut bits))
+        .map(|f| Ok((f.name.clone(), decode_value(&f.r#type, f, reader)?)))
         .collect()
 }
 
-fn decode_value(
-    ty: &str,
-    field: &schema::Field,
-    buf: &mut &[u8],
-    bits: &mut (u8, u8),
-) -> io::Result<Value> {
-    if ty != "U1" {
-        bits.1 = 0;
+fn decode_value(ty: &str, field: &schema::Field, reader: &mut impl BitRead) -> io::Result<Value> {
+    if !matches!(ty, "U1" | "Struct" | "Array") {
+        reader.byte_align();
     }
 
     Ok(match ty {
-        "U1" => {
-            if bits.1 == 0 {
-                *bits = (
-                    buf.try_get_u8().map_err(|_| io::ErrorKind::UnexpectedEof)?,
-                    8,
-                );
-            }
-
-            let value = Value::U1(bits.0 & 1 != 0);
-            bits.0 >>= 1;
-            bits.1 -= 1;
-            value
-        }
-        "U8" => Value::U8(buf.try_get_u8().map_err(|_| io::ErrorKind::UnexpectedEof)?),
-        "U16" => Value::U16(
-            buf.try_get_u16_le()
-                .map_err(|_| io::ErrorKind::UnexpectedEof)?,
-        ),
-        "U32" => Value::U32(
-            buf.try_get_u32_le()
-                .map_err(|_| io::ErrorKind::UnexpectedEof)?,
-        ),
-        "U64" => Value::U64(
-            buf.try_get_u64_le()
-                .map_err(|_| io::ErrorKind::UnexpectedEof)?,
-        ),
-        "F32" => Value::F32(
-            buf.try_get_f32_le()
-                .map_err(|_| io::ErrorKind::UnexpectedEof)?,
-        ),
-        "F64" => Value::F64(
-            buf.try_get_f64_le()
-                .map_err(|_| io::ErrorKind::UnexpectedEof)?,
-        ),
+        "U1" => Value::U1(reader.read_bit()?),
+        "U8" => Value::U8(reader.read::<8, u8>()?),
+        "U16" => Value::U16(reader.read::<16, u16>()?),
+        "U32" => Value::U32(reader.read::<32, u32>()?),
+        "U64" => Value::U64(reader.read::<64, u64>()?),
+        "F32" => Value::F32(f32::from_bits(reader.read::<32, u32>()?)),
+        "F64" => Value::F64(f64::from_bits(reader.read::<64, u64>()?)),
         "String" => {
-            let n = buf
-                .iter()
-                .position(|&b| b == 0)
-                .ok_or(io::ErrorKind::UnexpectedEof)?;
-            let value = String::from_utf8_lossy(&buf[..n]).into_owned();
-            buf.advance(n + 1);
-            Value::String(value)
+            let mut bytes = Vec::new();
+            loop {
+                let byte = reader.read::<8, u8>()?;
+                if byte == 0 {
+                    break;
+                }
+                bytes.push(byte);
+            }
+            Value::String(String::from_utf8_lossy(&bytes).into_owned())
         }
-        "Struct" => Value::Struct(decode_fields(&field.fields, buf)?),
+        "Struct" => Value::Struct(decode_fields(&field.fields, reader)?),
         "Object" => {
-            let n = buf
-                .try_get_u32_le()
-                .map_err(|_| io::ErrorKind::UnexpectedEof)? as usize;
-            let value = buf[..n].to_vec();
-            buf.advance(n);
-            Value::Object(value)
+            let n = reader.read::<32, u32>()? as usize;
+            Value::Object(reader.read_to_vec(n)?)
         }
         "Array" => {
-            let n = buf
-                .try_get_u32_le()
-                .map_err(|_| io::ErrorKind::UnexpectedEof)? as usize;
-            let mut bits = (0, 0);
+            let n = match field.size {
+                0 => {
+                    reader.byte_align();
+                    reader.read::<32, u32>()? as usize
+                }
+                n => n as usize,
+            };
+
+            let ty = field
+                .type_name
+                .as_deref()
+                .ok_or(io::ErrorKind::InvalidData)?;
 
             Value::Array(
                 (0..n)
-                    .map(|_| {
-                        decode_value(field.type_name.as_deref().unwrap(), field, buf, &mut bits)
-                    })
+                    .map(|_| decode_value(ty, field, reader))
                     .collect::<io::Result<_>>()?,
             )
         }

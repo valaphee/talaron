@@ -159,16 +159,37 @@ def offset(address, length=1):
     return pos if pos + length <= len(data) else None
 
 
+def cstring(address):
+    if (pos := offset(address)) is None:
+        return None
+
+    end = data.find(b"\0", pos)
+    if end < 0:
+        return None
+
+    try:
+        return data[pos:end].decode("ascii")
+    except UnicodeDecodeError:
+        return None
+
+
 def add_struct(parent, address):
     while (pos := offset(address, 0x30)) is not None:
-        type, nested, helper = struct.unpack_from("<8xI12xQQ", data, pos)
+        name, type, size, nested = struct.unpack_from("<QI8xIQ", data, pos)
 
         if type == 17:
             return True
 
-        elem = ET.SubElement(parent, "Array" if helper else TYPES[type])
+        elem = ET.SubElement(
+            parent,
+            "Array" if size != 0 else TYPES[type],
+            Name=cstring(name) or str(len(parent)),
+        )
 
-        if helper:
+        if size != 0:
+            if size != -1:
+                elem.set("Size", str(size))
+
             elem.set("TypeName", TYPES[type])
 
         if type == 14 and not add_struct(elem, nested):
@@ -181,7 +202,8 @@ def add_struct(parent, address):
 
 root = ET.Element("Protocols")
 protocols = {
-    crc: ET.SubElement(root, "Protocol", Crc=f"0x{crc:08X}") for crc in sorted(CRCS)
+    crc: ET.SubElement(root, "Protocol", Name=str(index + 1), Crc=f"0x{crc:08X}")
+    for index, crc in enumerate(sorted(CRCS))
 }
 
 section = next(
@@ -193,12 +215,12 @@ for pos in range(
     min(section.PointerToRawData + section.SizeOfRawData, len(data)) - 0x20 + 1,
     8,
 ):
-    fields, crc, message_id = struct.unpack_from("<16xQII", data, pos)
+    fields, crc, id = struct.unpack_from("<16xQII", data, pos)
     if crc not in CRCS or not fields:
         continue
 
     protocol = protocols[crc]
-    elem = ET.SubElement(protocol, "Message", Id=str(message_id))
+    elem = ET.SubElement(protocol, "Message", Id=str(id), Name=str(id))
     if not add_struct(elem, fields):
         protocol.remove(elem)
 

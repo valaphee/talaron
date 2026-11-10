@@ -127,9 +127,10 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
                     if let Some(message_type) = protocol.messages.get(message_type as usize) {
                         if let Ok(message) = jam::decode(&message_type, &mut buf) {
                             println!(
-                                "{} {} {:?}",
+                                "{} {} {} {:?}",
                                 if server { "S → C" } else { "C → S" },
-                                message_type.id,
+                                protocol.name,
+                                message_type.name,
                                 message
                             );
                         }
