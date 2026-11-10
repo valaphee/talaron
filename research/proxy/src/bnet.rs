@@ -86,15 +86,10 @@ pub async fn proxy() {
                 .headers_mut()
                 .insert("Sec-WebSocket-Protocol", PROTOCOL.parse().unwrap());
 
-            let (server, response) = client_async_tls(
-                request,
-                socket()
-                    .connect("34.90.185.250:1119".parse().unwrap())
+            let (server, response) =
+                client_async_tls(request, socket().connect(addr).await.unwrap())
                     .await
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+                    .unwrap();
             assert_eq!(
                 response
                     .headers()

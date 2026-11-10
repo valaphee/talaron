@@ -5,14 +5,14 @@ use std::os::windows::io::AsRawSocket as _;
 use tokio::net::TcpSocket;
 use windows::Win32::Networking::WinSock::{IP_UNICAST_IF, IPPROTO_IP, SOCKET, setsockopt};
 
-mod bgs;
+mod bnet;
 mod lobby;
 
 const IF: u32 = 6;
 
 #[tokio::main]
 async fn main() {
-    bgs::proxy().await;
+    bnet::proxy().await;
 }
 
 pub fn socket() -> TcpSocket {
@@ -30,4 +30,31 @@ pub fn socket() -> TcpSocket {
     }
 
     socket
+}
+
+fn hexdump(bytes: &[u8]) {
+    for (row, chunk) in bytes.chunks(16).enumerate() {
+        print!("{:08x}  ", row * 16);
+
+        for i in 0..16 {
+            if let Some(byte) = chunk.get(i) {
+                print!("{byte:02x} ");
+            } else {
+                print!("   ");
+            }
+        }
+
+        print!(" |");
+        for &byte in chunk {
+            print!(
+                "{}",
+                if byte.is_ascii_graphic() || byte == b' ' {
+                    byte as char
+                } else {
+                    '.'
+                }
+            );
+        }
+        println!("|");
+    }
 }
