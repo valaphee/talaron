@@ -2421,7 +2421,7 @@
     </Message>
     <Message Id="20330" Name="20330" />
   </Protocol>
-  <Protocol Name="0xC6114F82" Crc="0xC6114F82">
+  <Protocol Name="ClientInLobbyChat" Crc="0xC6114F82">
     <Message Id="20400" Name="20400">
       <Struct Name="0">
         <Struct Name="0">
@@ -2545,7 +2545,7 @@
       <U32 Name="1" />
     </Message>
   </Protocol>
-  <Protocol Name="0x3B5D9E99" Crc="0x3B5D9E99">
+  <Protocol Name="ClientInLobbyConnect" Crc="0x3B5D9E99">
     <Message Id="20500" Name="20500">
       <Struct Name="0">
         <U64 Name="seq" />
@@ -2767,7 +2767,7 @@
       <String Name="0" />
     </Message>
   </Protocol>
-  <Protocol Name="0x6F7DF2DF" Crc="0x6F7DF2DF">
+  <Protocol Name="ClientInLobbyParty" Crc="0x6F7DF2DF">
     <Message Id="20700" Name="20700">
       <Struct Name="0">
         <Array Name="0" TypeName="Struct">
@@ -3836,7 +3836,7 @@
       </Struct>
     </Message>
   </Protocol>
-  <Protocol Name="0x22216E16" Crc="0x22216E16">
+  <Protocol Name="ClientInLobbyPlayer" Crc="0x22216E16">
     <Message Id="20800" Name="20800">
       <Array Name="0" TypeName="String" />
     </Message>
@@ -5184,7 +5184,7 @@
       <U64 Name="0" />
     </Message>
   </Protocol>
-  <Protocol Name="0x8903C12A" Crc="0x8903C12A">
+  <Protocol Name="ClientOutLobbyChat" Crc="0x8903C12A">
     <Message Id="21700" Name="21700">
       <Struct Name="0">
         <Struct Name="0">
@@ -5224,7 +5224,7 @@
       <U8 Name="0" />
     </Message>
   </Protocol>
-  <Protocol Name="0x345AF177" Crc="0x345AF177">
+  <Protocol Name="ClientOutLobbyConnect" Crc="0x345AF177">
     <Message Id="21800" Name="21800">
       <String Name="0" />
       <Struct Name="1">
@@ -5366,7 +5366,7 @@
       <U32 Name="0" />
     </Message>
   </Protocol>
-  <Protocol Name="0x14C5E059" Crc="0x14C5E059">
+  <Protocol Name="ClientOutLobbyParty" Crc="0x14C5E059">
     <Message Id="22100" Name="22100" />
     <Message Id="22101" Name="22101">
       <Struct Name="0">
@@ -5473,7 +5473,7 @@
       <U64 Name="1" />
     </Message>
   </Protocol>
-  <Protocol Name="0xE5FF9BD4" Crc="0xE5FF9BD4">
+  <Protocol Name="ClientOutLobbyPlayer" Crc="0xE5FF9BD4">
     <Message Id="22200" Name="22200">
       <Struct Name="0">
         <Array Name="0" TypeName="Struct">
@@ -5721,7 +5721,7 @@
       <U8 Name="0" />
     </Message>
   </Protocol>
-  <Protocol Name="0x747E5A91" Crc="0x747E5A91">
+  <Protocol Name="ClientInLobbyCustomGame" Crc="0x747E5A91">
     <Message Id="23300" Name="23300">
       <Struct Name="0">
         <Array Name="0" TypeName="Struct">
@@ -10594,7 +10594,7 @@
   <Protocol Name="0x6EC73379" Crc="0x6EC73379">
     <Message Id="23400" Name="23400" />
   </Protocol>
-  <Protocol Name="0xC59CD2FD" Crc="0xC59CD2FD">
+  <Protocol Name="ClientOutLobbyCustomGame" Crc="0xC59CD2FD">
     <Message Id="24000" Name="24000">
       <U8 Name="0" />
       <String Name="1" />
@@ -12417,7 +12417,7 @@
       <U1 Name="3" />
     </Message>
   </Protocol>
-  <Protocol Name="0x075AFBC5" Crc="0x075AFBC5">
+  <Protocol Name="ClientOutLobbyPlayerProgression" Crc="0x075AFBC5">
     <Message Id="24200" Name="24200" />
     <Message Id="24201" Name="24201">
       <Struct Name="0">
@@ -12579,7 +12579,7 @@
       <U32 Name="0" />
     </Message>
   </Protocol>
-  <Protocol Name="0xAFCDB711" Crc="0xAFCDB711">
+  <Protocol Name="ClientInLobbyPlayerProgression" Crc="0xAFCDB711">
     <Message Id="24300" Name="24300">
       <Struct Name="0">
         <Array Name="0" TypeName="Struct">
@@ -13234,7 +13234,7 @@
       <U1 Name="2" />
     </Message>
   </Protocol>
-  <Protocol Name="0x48941D74" Crc="0x48941D74">
+  <Protocol Name="ClientOutLobbyHeroProgression" Crc="0x48941D74">
     <Message Id="24500" Name="24500">
       <U64 Name="0" />
       <U64 Name="1" />
@@ -13290,7 +13290,7 @@
       <U64 Name="0" />
     </Message>
   </Protocol>
-  <Protocol Name="0xA7EDA1ED" Crc="0xA7EDA1ED">
+  <Protocol Name="ClientInLobbyHeroProgression" Crc="0xA7EDA1ED">
     <Message Id="24900" Name="24900">
       <U32 Name="0" />
       <Array Name="1" TypeName="Struct">
@@ -14173,7 +14173,7 @@
     <Message Id="26506" Name="26506" />
     <Message Id="26507" Name="26507" />
   </Protocol>
-  <Protocol Name="0x9781E741" Crc="0x9781E741">
+  <Protocol Name="ClientOutLobbyFriends" Crc="0x9781E741">
     <Message Id="27000" Name="27000">
       <U64 Name="0" />
       <U32 Name="1" />
@@ -14282,7 +14282,7 @@
     </Message>
     <Message Id="27012" Name="27012" />
   </Protocol>
-  <Protocol Name="0x4C5A1F25" Crc="0x4C5A1F25">
+  <Protocol Name="ClientInLobbyFriends" Crc="0x4C5A1F25">
     <Message Id="27100" Name="27100">
       <Array Name="0" TypeName="Struct">
         <Struct Name="0">

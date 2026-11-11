@@ -18,10 +18,10 @@ TYPES = (
     "F32",
     "F64",
     "String",
-    "String",
+    "",
     "Struct",
     "Object",
-    "Dynamic",
+    "",
 )
 
 data = open(sys.argv[1], "rb").read()
@@ -60,8 +60,10 @@ def cstring(address):
 def add_struct(parent, address):
     while (pos := offset(address, 0x30)) is not None:
         name, type, size, nested = struct.unpack_from("<QI8xiQ", data, pos)
+
         if type == 17:
             return True
+
         if type > 17:
             return False
 
