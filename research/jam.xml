@@ -1360,7 +1360,7 @@
       <Object Name="1" />
     </Message>
   </Protocol>
-  <Protocol Name="0xCDF02309" Crc="0xCDF02309">
+  <Protocol Name="ClientInInstance" Crc="0xCDF02309">
     <Message Id="20300" Name="20300">
       <U8 Name="0" />
       <Struct Name="1">
@@ -4955,7 +4955,7 @@
       <U1 Name="0" />
     </Message>
   </Protocol>
-  <Protocol Name="0x9F4300F2" Crc="0x9F4300F2">
+  <Protocol Name="ClientOutInstance" Crc="0x9F4300F2">
     <Message Id="21600" Name="21600">
       <String Name="0" />
       <U32 Name="1" />
@@ -5707,7 +5707,7 @@
       <U1 Name="2" />
     </Message>
   </Protocol>
-  <Protocol Name="0x716AD5D9" Crc="0x716AD5D9">
+  <Protocol Name="ClientOutPvP" Crc="0x716AD5D9">
     <Message Id="22300" Name="22300" />
     <Message Id="22301" Name="22301" />
     <Message Id="22302" Name="22302" />
@@ -13458,7 +13458,7 @@
       </Array>
     </Message>
   </Protocol>
-  <Protocol Name="0x1DDAA32C" Crc="0x1DDAA32C">
+  <Protocol Name="ClientInCombat" Crc="0x1DDAA32C">
     <Message Id="25000" Name="25000">
       <U8 Name="0" />
       <Struct Name="1">
@@ -13867,7 +13867,7 @@
       <U32 Name="0" />
     </Message>
   </Protocol>
-  <Protocol Name="0x88ECFB4D" Crc="0x88ECFB4D">
+  <Protocol Name="ClientOutStats" Crc="0x88ECFB4D">
     <Message Id="25700" Name="25700">
       <Struct Name="0">
         <U32 Name="id" />
@@ -13896,7 +13896,7 @@
     <Message Id="25708" Name="25708" />
     <Message Id="25709" Name="25709" />
   </Protocol>
-  <Protocol Name="0xC002620F" Crc="0xC002620F">
+  <Protocol Name="ClientInStats" Crc="0xC002620F">
     <Message Id="25800" Name="25800">
       <Array Name="0" TypeName="Struct">
         <U64 Name="0" />
@@ -14674,7 +14674,7 @@
     </Message>
     <Message Id="27305" Name="27305" />
   </Protocol>
-  <Protocol Name="0x3297BB91" Crc="0x3297BB91">
+  <Protocol Name="ClientInVoice" Crc="0x3297BB91">
     <Message Id="27500" Name="27500">
       <Struct Name="0">
         <U32 Name="id" />
@@ -14758,7 +14758,7 @@
     </Message>
     <Message Id="28102" Name="28102" />
   </Protocol>
-  <Protocol Name="0x0ADE4B40" Crc="0x0ADE4B40">
+  <Protocol Name="ClientOutCheats" Crc="0x0ADE4B40">
     <Message Id="30700" Name="30700">
       <Struct Name="0">
         <U32 Name="id" />
@@ -20876,7 +20876,7 @@
   <Protocol Name="0xEB45AD29" Crc="0xEB45AD29">
     <Message Id="42600" Name="42600" />
   </Protocol>
-  <Protocol Name="0xCF043764" Crc="0xCF043764">
+  <Protocol Name="ClientOutSpectate" Crc="0xCF043764">
     <Message Id="42700" Name="42700">
       <U32 Name="0" />
       <U32 Name="1" />

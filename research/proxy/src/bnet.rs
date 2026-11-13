@@ -1,8 +1,9 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Read};
+use std::fs::{self, File};
+use std::io::BufReader;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use futures_util::{SinkExt, StreamExt};
 use prost_reflect::{DescriptorPool, DynamicMessage};
@@ -18,12 +19,6 @@ use crate::{C2S, S2C, lobby};
 const HOST: &str = "eu.actual.battle.net";
 const ADDR: &str = "35.204.119.70:1119";
 const PROTOCOL: &str = "v1.rpc.battle.net";
-
-fn service_hash(name: &str) -> u32 {
-    name.bytes().fold(0x811C9DC5u32, |hash, byte| {
-        (hash ^ u32::from(byte)).wrapping_mul(0x01000193)
-    })
-}
 
 pub async fn proxy() {
     rustls::crypto::aws_lc_rs::default_provider()
@@ -50,7 +45,7 @@ pub async fn proxy() {
     }));
 
     let pool = DescriptorPool::decode(
-        std::fs::read("research/proto/descriptors.pb")
+        fs::read("research/proto/descriptors.pb")
             .unwrap()
             .as_slice(),
     )
@@ -60,7 +55,7 @@ pub async fn proxy() {
 
     loop {
         let (client, _) = listener.accept().await.unwrap();
-        let start = std::time::Instant::now();
+        let start = Instant::now();
 
         let tls_acceptor = tls_acceptor.clone();
         let pool = pool.clone();
@@ -78,7 +73,7 @@ pub async fn proxy() {
                 response
                     .headers()
                     .get("Sec-WebSocket-Protocol")
-                    .and_then(|v| v.to_str().ok()),
+                    .and_then(|value| value.to_str().ok()),
                 Some(PROTOCOL),
             );
 
@@ -112,7 +107,7 @@ pub async fn proxy() {
                         .get_field_by_name("descriptor_name")
                         .unwrap();
 
-                    (service_hash(name.as_str().unwrap()), service)
+                    (fnv1a(name.as_str().unwrap()), service)
                 })
                 .collect();
 
@@ -133,10 +128,8 @@ pub async fn proxy() {
                 };
 
                 if let Message::Binary(bytes) = &message {
-                    let mut bytes = bytes.as_ref();
-
-                    let header_len = bytes.read_be::<u16>().unwrap() as usize;
-                    let (header, body) = bytes.split_at(header_len);
+                    let (length, bytes) = bytes.split_first_chunk::<2>().unwrap();
+                    let (header, payload) = bytes.split_at(u16::from_be_bytes(*length).into());
 
                     let header = DynamicMessage::decode(header_type.clone(), header).unwrap();
 
@@ -191,7 +184,7 @@ pub async fn proxy() {
                             } else {
                                 method.input()
                             },
-                            body,
+                            payload,
                         )
                         .unwrap();
 
@@ -285,4 +278,10 @@ pub async fn proxy() {
             }
         });
     }
+}
+
+fn fnv1a(name: &str) -> u32 {
+    name.bytes().fold(0x811C9DC5u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(0x01000193)
+    })
 }

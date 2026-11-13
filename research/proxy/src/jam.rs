@@ -1,7 +1,7 @@
 use std::ops::{Index, IndexMut};
 use std::{fmt, io};
 
-use bitstream_io::{BitRead, BitReader, LittleEndian};
+use bitstream_io::{BitRead, BitReader, BitWrite, BitWriter, LittleEndian};
 
 use crate::FIELD;
 
@@ -19,119 +19,134 @@ pub enum Value {
     Struct(Vec<(String, Value)>),
     Object(Vec<u8>),
     Array(Vec<Value>),
+    ArrayFixed(Vec<Value>),
 }
 
 impl Value {
+    pub fn as_u1(&self) -> bool {
+        let Self::U1(value) = self else {
+            panic!();
+        };
+        *value
+    }
+
+    pub fn as_u1_mut(&mut self) -> &mut bool {
+        let Self::U1(value) = self else {
+            panic!();
+        };
+        value
+    }
+
     pub fn as_u8(&self) -> u8 {
-        match self {
-            Self::U8(v) => *v,
-            _ => panic!(),
-        }
+        let Self::U8(value) = self else {
+            panic!();
+        };
+        *value
     }
 
     pub fn as_u8_mut(&mut self) -> &mut u8 {
-        match self {
-            Self::U8(v) => v,
-            _ => panic!(),
-        }
+        let Self::U8(value) = self else {
+            panic!();
+        };
+        value
     }
 
     pub fn as_u16(&self) -> u16 {
-        match self {
-            Self::U16(v) => *v,
-            _ => panic!(),
-        }
+        let Self::U16(value) = self else {
+            panic!();
+        };
+        *value
     }
 
     pub fn as_u16_mut(&mut self) -> &mut u16 {
-        match self {
-            Self::U16(v) => v,
-            _ => panic!(),
-        }
+        let Self::U16(value) = self else {
+            panic!();
+        };
+        value
     }
 
     pub fn as_u32(&self) -> u32 {
-        match self {
-            Self::U32(v) => *v,
-            _ => panic!(),
-        }
+        let Self::U32(value) = self else {
+            panic!();
+        };
+        *value
     }
 
     pub fn as_u32_mut(&mut self) -> &mut u32 {
-        match self {
-            Self::U32(v) => v,
-            _ => panic!(),
-        }
+        let Self::U32(value) = self else {
+            panic!();
+        };
+        value
     }
 
     pub fn as_u64(&self) -> u64 {
-        match self {
-            Self::U64(v) => *v,
-            _ => panic!(),
-        }
+        let Self::U64(value) = self else {
+            panic!();
+        };
+        *value
     }
 
     pub fn as_u64_mut(&mut self) -> &mut u64 {
-        match self {
-            Self::U64(v) => v,
-            _ => panic!(),
-        }
+        let Self::U64(value) = self else {
+            panic!();
+        };
+        value
     }
 
     pub fn as_f32(&self) -> f32 {
-        match self {
-            Self::F32(v) => *v,
-            _ => panic!(),
-        }
+        let Self::F32(value) = self else {
+            panic!();
+        };
+        *value
     }
 
     pub fn as_f32_mut(&mut self) -> &mut f32 {
-        match self {
-            Self::F32(v) => v,
-            _ => panic!(),
-        }
+        let Self::F32(value) = self else {
+            panic!();
+        };
+        value
     }
 
     pub fn as_f64(&self) -> f64 {
-        match self {
-            Self::F64(v) => *v,
-            _ => panic!(),
-        }
+        let Self::F64(value) = self else {
+            panic!();
+        };
+        *value
     }
 
     pub fn as_f64_mut(&mut self) -> &mut f64 {
-        match self {
-            Self::F64(v) => v,
-            _ => panic!(),
-        }
+        let Self::F64(value) = self else {
+            panic!();
+        };
+        value
     }
 
     pub fn as_string(&self) -> &String {
-        match self {
-            Self::String(v) => v,
-            _ => panic!(),
-        }
+        let Self::String(value) = self else {
+            panic!();
+        };
+        value
     }
 
     pub fn as_string_mut(&mut self) -> &mut String {
-        match self {
-            Self::String(v) => v,
-            _ => panic!(),
-        }
+        let Self::String(value) = self else {
+            panic!();
+        };
+        value
     }
 
-    pub fn as_slice(&self) -> &[Value] {
-        match self {
-            Self::Array(v) => v.as_slice(),
-            _ => panic!(),
-        }
+    pub fn as_array(&self) -> &[Value] {
+        let (Self::Array(values) | Self::ArrayFixed(values)) = self else {
+            panic!();
+        };
+        values
     }
 
-    pub fn as_mut_slice(&mut self) -> &mut [Value] {
-        match self {
-            Self::Array(v) => v.as_mut_slice(),
-            _ => panic!(),
-        }
+    pub fn as_array_mut(&mut self) -> &mut [Value] {
+        let (Self::Array(values) | Self::ArrayFixed(values)) = self else {
+            panic!();
+        };
+        values
     }
 }
 
@@ -139,55 +154,115 @@ impl Index<&str> for Value {
     type Output = Value;
 
     fn index(&self, name: &str) -> &Self::Output {
-        match self {
-            Self::Struct(v) => &v.iter().find(|f| f.0 == name).unwrap().1,
-            _ => panic!(),
-        }
+        let Self::Struct(fields) = self else {
+            panic!();
+        };
+
+        &fields
+            .iter()
+            .find(|(field_name, _)| field_name == name)
+            .unwrap()
+            .1
     }
 }
 
 impl IndexMut<&str> for Value {
     fn index_mut(&mut self, name: &str) -> &mut Self::Output {
-        match self {
-            Self::Struct(v) => &mut v.iter_mut().find(|f| f.0 == name).unwrap().1,
-            _ => panic!(),
-        }
+        let Self::Struct(fields) = self else {
+            panic!();
+        };
+
+        &mut fields
+            .iter_mut()
+            .find(|(field_name, _)| field_name == name)
+            .unwrap()
+            .1
     }
 }
 
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::U1(v) => v.fmt(f),
-            Value::U8(v) => v.fmt(f),
-            Value::U16(v) => v.fmt(f),
-            Value::U32(v) => v.fmt(f),
-            Value::U64(v) => v.fmt(f),
-            Value::F32(v) => v.fmt(f),
-            Value::F64(v) => v.fmt(f),
-            Value::String(v) => v.fmt(f),
-            Value::Struct(v) => {
-                let mut s = f.debug_struct("");
-                for (name, value) in v.iter() {
-                    s.field(&format!("{FIELD}{name}{FIELD:#}"), value);
+            Self::U1(value) => value.fmt(f),
+            Self::U8(value) => value.fmt(f),
+            Self::U16(value) => value.fmt(f),
+            Self::U32(value) => value.fmt(f),
+            Self::U64(value) => value.fmt(f),
+            Self::F32(value) => value.fmt(f),
+            Self::F64(value) => value.fmt(f),
+            Self::String(value) => value.fmt(f),
+            Self::Struct(fields) => {
+                let mut debug = f.debug_struct("");
+                for (name, value) in fields {
+                    debug.field(&format!("{FIELD}{name}{FIELD:#}"), value);
                 }
-                s.finish()
+                debug.finish()
             }
-            Value::Object(v) => {
+            Self::Object(bytes) => {
                 write!(f, "0x")?;
-                for b in v {
-                    write!(f, "{b:02x}")?;
+                for byte in bytes {
+                    write!(f, "{byte:02x}")?;
                 }
                 Ok(())
             }
-            Value::Array(v) => v.fmt(f),
+            Self::Array(values) | Self::ArrayFixed(values) => values.fmt(f),
+        }
+    }
+}
+
+pub fn encode(value: &Value, buf: &mut impl io::Write) -> io::Result<()> {
+    let mut writer = BitWriter::endian(buf, LittleEndian);
+    value.encode(&mut writer)?;
+    writer.byte_align()
+}
+
+impl Value {
+    fn encode(&self, writer: &mut impl BitWrite) -> io::Result<()> {
+        if !matches!(self, Self::U1(_) | Self::Struct(_) | Self::ArrayFixed(_)) {
+            writer.byte_align()?;
+        }
+
+        match self {
+            Self::U1(value) => writer.write_bit(*value),
+            Self::U8(value) => writer.write_from(*value),
+            Self::U16(value) => writer.write_from(*value),
+            Self::U32(value) => writer.write_from(*value),
+            Self::U64(value) => writer.write_from(*value),
+            Self::F32(value) => writer.write_from(*value),
+            Self::F64(value) => writer.write_from(*value),
+            Self::String(value) => {
+                if value.as_bytes().contains(&0) {
+                    return Err(io::ErrorKind::InvalidInput.into());
+                }
+
+                writer.write_bytes(value.as_bytes())?;
+                writer.write_from(0u8)
+            }
+            Self::Struct(fields) => fields
+                .iter()
+                .try_for_each(|(_, value)| value.encode(writer)),
+            Self::Object(bytes) => {
+                writer.write_from(
+                    u32::try_from(bytes.len()).map_err(|_| io::ErrorKind::InvalidInput)?,
+                )?;
+                writer.write_bytes(bytes)
+            }
+            Self::Array(values) | Self::ArrayFixed(values) => {
+                if matches!(self, Self::Array(_)) {
+                    writer.write_from(
+                        u32::try_from(values.len()).map_err(|_| io::ErrorKind::InvalidInput)?,
+                    )?;
+                }
+
+                values.iter().try_for_each(|value| value.encode(writer))
+            }
         }
     }
 }
 
 pub fn decode(message: &schema::Message, buf: &mut &[u8]) -> io::Result<Value> {
     let mut reader = BitReader::endian(buf, LittleEndian);
-    Ok(Value::Struct(decode_fields(&message.fields, &mut reader)?))
+    decode_fields(&message.fields, &mut reader).map(Value::Struct)
 }
 
 fn decode_fields(
@@ -196,58 +271,66 @@ fn decode_fields(
 ) -> io::Result<Vec<(String, Value)>> {
     fields
         .iter()
-        .map(|f| Ok((f.name.clone(), decode_value(&f.r#type, f, reader)?)))
+        .map(|field| {
+            let value = decode_value(&field.r#type, field, reader)?;
+            Ok((field.name.clone(), value))
+        })
         .collect()
 }
 
-fn decode_value(ty: &str, field: &schema::Field, reader: &mut impl BitRead) -> io::Result<Value> {
-    if !matches!(ty, "U1" | "Struct" | "Array") {
+fn decode_value(
+    type_name: &str,
+    field: &schema::Field,
+    reader: &mut impl BitRead,
+) -> io::Result<Value> {
+    if !matches!(type_name, "U1" | "Struct" | "Array") {
         reader.byte_align();
     }
 
-    Ok(match ty {
+    Ok(match type_name {
         "U1" => Value::U1(reader.read_bit()?),
-        "U8" => Value::U8(reader.read::<8, u8>()?),
-        "U16" => Value::U16(reader.read::<16, u16>()?),
-        "U32" => Value::U32(reader.read::<32, u32>()?),
-        "U64" => Value::U64(reader.read::<64, u64>()?),
-        "F32" => Value::F32(f32::from_bits(reader.read::<32, u32>()?)),
-        "F64" => Value::F64(f64::from_bits(reader.read::<64, u64>()?)),
+        "U8" => Value::U8(reader.read_to()?),
+        "U16" => Value::U16(reader.read_to()?),
+        "U32" => Value::U32(reader.read_to()?),
+        "U64" => Value::U64(reader.read_to()?),
+        "F32" => Value::F32(reader.read_to()?),
+        "F64" => Value::F64(reader.read_to()?),
         "String" => {
             let mut bytes = Vec::new();
             loop {
-                let byte = reader.read::<8, u8>()?;
-                if byte == 0 {
-                    break;
+                match reader.read_to::<u8>()? {
+                    0 => break,
+                    byte => bytes.push(byte),
                 }
-                bytes.push(byte);
             }
             Value::String(String::from_utf8_lossy(&bytes).into_owned())
         }
         "Struct" => Value::Struct(decode_fields(&field.fields, reader)?),
         "Object" => {
-            let n = reader.read::<32, u32>()? as usize;
-            Value::Object(reader.read_to_vec(n)?)
+            let length = reader.read_to::<u32>()? as usize;
+            Value::Object(reader.read_to_vec(length)?)
         }
         "Array" => {
-            let n = match field.size {
+            let length = match field.size {
                 0 => {
                     reader.byte_align();
-                    reader.read::<32, u32>()? as usize
+                    reader.read_to::<u32>()? as usize
                 }
-                n => n as usize,
+                length => length as usize,
             };
-
-            let ty = field
+            let type_name = field
                 .type_name
                 .as_deref()
                 .ok_or(io::ErrorKind::InvalidData)?;
+            let values = (0..length)
+                .map(|_| decode_value(type_name, field, reader))
+                .collect::<io::Result<Vec<_>>>()?;
 
-            Value::Array(
-                (0..n)
-                    .map(|_| decode_value(ty, field, reader))
-                    .collect::<io::Result<_>>()?,
-            )
+            if field.size == 0 {
+                Value::Array(values)
+            } else {
+                Value::ArrayFixed(values)
+            }
         }
         _ => return Err(io::ErrorKind::InvalidData.into()),
     })

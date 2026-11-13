@@ -1,8 +1,8 @@
-use std::io;
 use std::net::SocketAddr;
 use std::time::Instant;
+use std::{fs, io};
 
-use bytes::{Buf as _, Bytes, BytesMut};
+use bytes::{Buf as _, BufMut as _, Bytes, BytesMut};
 use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, KeyInit, Mac};
 use panama::Panama;
@@ -16,10 +16,10 @@ use windows::Win32::NetworkManagement::IpHelper::{
     CreateUnicastIpAddressEntry, InitializeUnicastIpAddressEntry, MIB_UNICASTIPADDRESS_ROW,
 };
 
-use crate::{C2S, S2C, jam, socket};
+use crate::{C2S, S2C, game, jam, socket};
 
 pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
-    let protocols = jam::schema::parse(&std::fs::read_to_string("research/jam.xml").unwrap());
+    let protocols = jam::schema::parse(&fs::read_to_string("research/jam.xml").unwrap());
 
     let mut row = MIB_UNICASTIPADDRESS_ROW::default();
     unsafe {
@@ -112,7 +112,7 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
         let mut channels = vec![protocols.first().unwrap()];
 
         loop {
-            let (bytes, server) = tokio::select! {
+            let (mut bytes, server) = tokio::select! {
                 packet = client_rx.next() => {
                     let Some(packet) = packet else { break };
                     (packet.unwrap(), false)
@@ -123,14 +123,14 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
                 }
             };
 
-            let mut buf = &bytes[..];
+            let mut buf = bytes.as_ref();
 
             let channel_id = buf.get_u8();
             let message_type = buf.get_u8();
 
             let protocol = channels[channel_id as usize];
             let message_type = &protocol.messages[message_type as usize];
-            if let Ok(message) = jam::decode(&message_type, &mut buf) {
+            if let Ok(mut message) = jam::decode(message_type, &mut buf) {
                 println!(
                     "[{:9.3}] {} {} {} {:?}",
                     start.elapsed().as_secs_f64(),
@@ -144,16 +144,80 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
                     message
                 );
 
-                if message_type.id == 1 {
-                    for protocol_crc in message["0"].as_slice() {
-                        let protocol_crc = protocol_crc.as_u32();
-                        channels.push(
-                            protocols
-                                .iter()
-                                .find(|protocol| protocol.crc == protocol_crc)
-                                .unwrap(),
-                        );
+                match message_type.id {
+                    1 => {
+                        for protocol_crc in message["0"].as_array() {
+                            let protocol_crc = protocol_crc.as_u32();
+                            channels.push(
+                                protocols
+                                    .iter()
+                                    .find(|protocol| protocol.crc == protocol_crc)
+                                    .unwrap(),
+                            );
+                        }
                     }
+                    20600 => {
+                        let mut payload = Vec::new();
+                        jam::encode(&message, &mut payload).unwrap();
+
+                        let mut state = 0xED7C_37EA_8F5D_39F0u64;
+
+                        for chunk in payload[1..].chunks_mut(8) {
+                            for _ in 0..10 {
+                                state = (state ^ 0xCBF2_9CE4_8422_2325)
+                                    .wrapping_mul(0x0000_0100_0000_01B3);
+                            }
+                            for (byte, mask) in chunk.iter_mut().zip(state.to_le_bytes()) {
+                                *byte ^= mask;
+                            }
+                        }
+
+                        message = jam::decode(message_type, &mut payload.as_slice()).unwrap();
+
+                        *message["0"].as_u1_mut() = false;
+
+                        let value = &mut message["1"];
+
+                        for value in value["5"].as_array_mut() {
+                            *value["0"].as_u16_mut() = 0;
+                            for value in value["1"].as_array_mut() {
+                                *value.as_u8_mut() = 0;
+                            }
+                            for value in value["2"].as_array_mut() {
+                                *value.as_u8_mut() = 0;
+                            }
+                        }
+
+                        let port = value["6"].as_u16();
+
+                        let host = String::from_utf8(
+                            value["7"]
+                                .as_array()
+                                .iter()
+                                .map(|value| value.as_u8())
+                                .take_while(|&byte| byte != 0)
+                                .collect::<Vec<_>>(),
+                        )
+                        .unwrap();
+
+                        let addr = game::proxy(SocketAddr::new(host.parse().unwrap(), port)).await;
+
+                        *value["6"].as_u16_mut() = addr.port();
+
+                        let host = addr.ip().to_string();
+                        let host = host.as_bytes();
+                        for (i, value) in value["7"].as_array_mut().iter_mut().enumerate() {
+                            *value.as_u8_mut() = host.get(i).copied().unwrap_or(0);
+                        }
+
+                        let mut payload = BytesMut::new();
+                        payload.put_u8(channel_id);
+                        payload.put_u8(0);
+
+                        jam::encode(&message, &mut (&mut payload).writer()).unwrap();
+                        bytes = payload.freeze();
+                    }
+                    _ => {}
                 }
             }
 

@@ -1,5 +1,3 @@
-#![feature(read_le)]
-
 use std::os::windows::io::AsRawSocket as _;
 
 use anstyle::{AnsiColor, Color, Style};
@@ -7,6 +5,7 @@ use tokio::net::TcpSocket;
 use windows::Win32::Networking::WinSock::{IP_UNICAST_IF, IPPROTO_IP, SOCKET, setsockopt};
 
 mod bnet;
+mod game;
 mod jam;
 mod lobby;
 
@@ -21,7 +20,7 @@ async fn main() {
     bnet::proxy().await;
 }
 
-pub fn socket() -> TcpSocket {
+fn socket() -> TcpSocket {
     let socket = TcpSocket::new_v4().unwrap();
     unsafe {
         assert_eq!(

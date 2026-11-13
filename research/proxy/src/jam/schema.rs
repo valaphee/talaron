@@ -22,16 +22,17 @@ pub struct Field {
 }
 
 pub fn parse(xml: &str) -> Vec<Protocol> {
-    let mut xml = Reader::from_str(xml);
-    xml.config_mut().trim_text(true);
-    xml.config_mut().expand_empty_elements = true;
+    let mut reader = Reader::from_str(xml);
+    let config = reader.config_mut();
+    config.trim_text(true);
+    config.expand_empty_elements = true;
 
     let mut protocols = Vec::new();
 
     loop {
-        match xml.read_event().unwrap() {
-            Event::Start(e) if e.name().0 == "Protocol" => {
-                protocols.push(parse_protocol(&mut xml, &e));
+        match reader.read_event().unwrap() {
+            Event::Start(element) if element.name().into_inner() == "Protocol" => {
+                protocols.push(parse_protocol(&mut reader, &element));
             }
             Event::Eof => break,
             _ => {}
@@ -41,24 +42,24 @@ pub fn parse(xml: &str) -> Vec<Protocol> {
     protocols
 }
 
-fn parse_protocol(xml: &mut Reader<&[u8]>, e: &BytesStart<'_>) -> Protocol {
+fn parse_protocol(reader: &mut Reader<&[u8]>, element: &BytesStart<'_>) -> Protocol {
     let mut protocol = Protocol {
-        name:     attr(e, "Name").unwrap(),
-        crc:      u32::from_str_radix(attr(e, "Crc").unwrap().trim_start_matches("0x"), 16)
+        name:     attr(element, "Name").unwrap(),
+        crc:      u32::from_str_radix(attr(element, "Crc").unwrap().trim_start_matches("0x"), 16)
             .unwrap(),
         messages: Vec::new(),
     };
 
     loop {
-        match xml.read_event().unwrap() {
-            Event::Start(e) if e.name().0 == "Message" => {
+        match reader.read_event().unwrap() {
+            Event::Start(element) if element.name().into_inner() == "Message" => {
                 protocol.messages.push(Message {
-                    id:     attr(&e, "Id").unwrap().parse().unwrap(),
-                    name:   attr(&e, "Name").unwrap(),
-                    fields: parse_fields(xml, "Message"),
+                    id:     attr(&element, "Id").unwrap().parse().unwrap(),
+                    name:   attr(&element, "Name").unwrap(),
+                    fields: parse_fields(reader, "Message"),
                 });
             }
-            Event::End(e) if e.name().0 == "Protocol" => break,
+            Event::End(element) if element.name().into_inner() == "Protocol" => break,
             Event::Eof => break,
             _ => {}
         }
@@ -67,21 +68,23 @@ fn parse_protocol(xml: &mut Reader<&[u8]>, e: &BytesStart<'_>) -> Protocol {
     protocol
 }
 
-fn parse_fields(xml: &mut Reader<&[u8]>, end: &str) -> Vec<Field> {
+fn parse_fields(reader: &mut Reader<&[u8]>, end: &str) -> Vec<Field> {
     let mut fields = Vec::new();
 
     loop {
-        match xml.read_event().unwrap() {
-            Event::Start(e) => {
+        match reader.read_event().unwrap() {
+            Event::Start(element) => {
+                let type_name = element.name().into_inner();
+
                 fields.push(Field {
-                    name:      attr(&e, "Name").unwrap(),
-                    r#type:    e.name().0.to_owned(),
-                    size:      attr(&e, "Size").map_or(0, |v| v.parse().unwrap()),
-                    type_name: attr(&e, "TypeName"),
-                    fields:    parse_fields(xml, e.name().0),
+                    name:      attr(&element, "Name").unwrap(),
+                    r#type:    type_name.to_owned(),
+                    size:      attr(&element, "Size").map_or(0, |size| size.parse().unwrap()),
+                    type_name: attr(&element, "TypeName"),
+                    fields:    parse_fields(reader, type_name),
                 });
             }
-            Event::End(e) if e.name().0 == end => break,
+            Event::End(element) if element.name().into_inner() == end => break,
             Event::Eof => break,
             _ => {}
         }
@@ -90,9 +93,10 @@ fn parse_fields(xml: &mut Reader<&[u8]>, end: &str) -> Vec<Field> {
     fields
 }
 
-fn attr(e: &BytesStart<'_>, name: &str) -> Option<String> {
-    e.try_get_attribute(name).unwrap().map(|a| {
-        a.normalized_value(XmlVersion::Implicit1_0)
+fn attr(element: &BytesStart<'_>, name: &str) -> Option<String> {
+    element.try_get_attribute(name).unwrap().map(|attribute| {
+        attribute
+            .normalized_value(XmlVersion::Implicit1_0)
             .unwrap()
             .into_owned()
     })
