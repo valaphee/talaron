@@ -6,7 +6,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use futures_util::{SinkExt, StreamExt};
-use prost_reflect::{DescriptorPool, DynamicMessage};
+use prost_reflect::prost::Message as _;
+use prost_reflect::{DescriptorPool, DynamicMessage, Value};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{TlsAcceptor, rustls};
 use tokio_tungstenite::tungstenite::Message;
@@ -116,7 +117,7 @@ pub async fn proxy() {
                 .unwrap();
 
             loop {
-                let (message, server) = tokio::select! {
+                let (mut message, server) = tokio::select! {
                     message = client_rx.next() => {
                         let Some(message) = message else { break };
                         (message.unwrap(), false)
@@ -178,7 +179,7 @@ pub async fn proxy() {
                             pending.insert((server, token), method.clone());
                         }
 
-                        let message = DynamicMessage::decode(
+                        let mut payload = DynamicMessage::decode(
                             if response {
                                 method.output()
                             } else {
@@ -197,65 +198,88 @@ pub async fn proxy() {
                                 format!("{C2S}C → S{C2S:#}")
                             },
                             method.full_name(),
-                            message.to_text_format(),
+                            payload.to_text_format(),
                         );
 
                         if response
                             && method.full_name()
                                 == "bgs.protocol.game_utilities.v2.client.GameUtilitiesService.ProcessTask"
                         {
-                            let result = message.get_field_by_name("result").unwrap();
+                            let result = payload.get_field_by_name_mut("result").unwrap();
 
-                            let fields: HashMap<String, DynamicMessage> = result
-                                .as_list()
-                                .unwrap()
-                                .iter()
-                                .map(|field| {
-                                    let field = field.as_message().unwrap();
+                            let mut keys: [Option<[u8; 64]>; 4] = [None; 4];
+                            let mut cid = None;
+                            let mut host: Option<SocketAddr> = None;
 
-                                    (
-                                        field
-                                            .get_field_by_name("name")
-                                            .unwrap()
-                                            .as_str()
-                                            .unwrap()
-                                            .to_owned(),
-                                        field
-                                            .get_field_by_name("value")
-                                            .unwrap()
-                                            .as_message()
-                                            .unwrap()
-                                            .clone(),
-                                    )
-                                })
-                                .collect();
+                            for field in result.as_list().unwrap() {
+                                let field = field.as_message().unwrap();
+                                let value = field.get_field_by_name("value").unwrap();
+                                let value = value.as_message().unwrap();
 
-                            let keys: [[u8; 64]; 4] = ["k0", "k1", "k2", "k3"].map(|name| {
-                                fields[name]
-                                    .get_field_by_name("blob_value")
-                                    .unwrap()
-                                    .as_bytes()
-                                    .unwrap()
-                                    .as_ref()
-                                    .try_into()
-                                    .unwrap()
-                            });
+                                match field.get_field_by_name("name").unwrap().as_str().unwrap() {
+                                    name @ ("k0" | "k1" | "k2" | "k3") => {
+                                        keys[usize::from(name.as_bytes()[1] - b'0')] = Some(
+                                            value
+                                                .get_field_by_name("blob_value")
+                                                .unwrap()
+                                                .as_bytes()
+                                                .unwrap()
+                                                .as_ref()
+                                                .try_into()
+                                                .unwrap(),
+                                        );
+                                    }
+                                    "cid" => {
+                                        cid = Some(
+                                            value
+                                                .get_field_by_name("uint_value")
+                                                .unwrap()
+                                                .as_u64()
+                                                .unwrap(),
+                                        );
+                                    }
+                                    "hostv4" => {
+                                        host = Some(
+                                            value
+                                                .get_field_by_name("string_value")
+                                                .unwrap()
+                                                .as_str()
+                                                .unwrap()
+                                                .parse()
+                                                .unwrap(),
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                            }
 
-                            let cid = fields["cid"]
-                                .get_field_by_name("uint_value")
-                                .unwrap()
-                                .as_u64()
-                                .unwrap();
+                            let addr =
+                                lobby::proxy(host.unwrap(), cid.unwrap(), keys.map(Option::unwrap))
+                                    .await;
 
-                            let host: SocketAddr = fields["hostv4"]
-                                .get_field_by_name("string_value")
-                                .unwrap()
-                                .as_str()
-                                .unwrap()
-                                .parse()
-                                .unwrap();
+                            for field in result.as_list_mut().unwrap() {
+                                let field = field.as_message_mut().unwrap();
+                                if field.get_field_by_name("name").unwrap().as_str()
+                                    == Some("hostv4")
+                                {
+                                    field
+                                        .get_field_by_name_mut("value")
+                                        .unwrap()
+                                        .as_message_mut()
+                                        .unwrap()
+                                        .set_field_by_name(
+                                            "string_value",
+                                            Value::String(addr.to_string()),
+                                        );
+                                }
+                            }
 
-                            lobby::proxy(host, cid, keys).await;
+                            let header = header.encode_to_vec();
+                            let mut bytes =
+                                u16::try_from(header.len()).unwrap().to_be_bytes().to_vec();
+                            bytes.extend_from_slice(&header);
+                            bytes.extend_from_slice(&payload.encode_to_vec());
+                            message = Message::Binary(bytes.into());
                         }
                     }
                 }

@@ -18,27 +18,27 @@ use windows::Win32::NetworkManagement::IpHelper::{
 
 use crate::{C2S, S2C, game, jam, socket};
 
-pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
+pub async fn proxy(server_addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) -> SocketAddr {
     let protocols = jam::schema::parse(&fs::read_to_string("research/jam.xml").unwrap());
 
     let mut row = MIB_UNICASTIPADDRESS_ROW::default();
     unsafe {
         InitializeUnicastIpAddressEntry(&mut row);
         row.InterfaceIndex = 1;
-        row.Address = addr.into();
+        row.Address = server_addr.into();
         row.OnLinkPrefixLength = 32;
         row.SkipAsSource = true.into();
 
         let _ = CreateUnicastIpAddressEntry(&row);
     };
 
-    let listener = TcpListener::bind(addr).await.unwrap();
+    let listener = TcpListener::bind(server_addr).await.unwrap();
 
     tokio::spawn(async move {
         let (mut client, _) = listener.accept().await.unwrap();
         let start = Instant::now();
 
-        let mut server = socket().connect(addr).await.unwrap();
+        let mut server = socket().connect(server_addr).await.unwrap();
 
         let hello = forward::<17>(&mut client, &mut server).await;
         assert_eq!(&hello, b"HELLO PRO CLIENT\0");
@@ -90,7 +90,7 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
 
         let client = Framed::new(
             client,
-            LobbyCodec {
+            Codec {
                 encryptor: s2c_encryptor,
                 decryptor: c2s_decryptor,
                 decrypted: 0,
@@ -99,7 +99,7 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
 
         let server = Framed::new(
             server,
-            LobbyCodec {
+            Codec {
                 encryptor: c2s_encryptor,
                 decryptor: s2c_decryptor,
                 decrypted: 0,
@@ -112,7 +112,7 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
         let mut channels = vec![protocols.first().unwrap()];
 
         loop {
-            let (mut bytes, server) = tokio::select! {
+            let (mut bytes, from_server) = tokio::select! {
                 packet = client_rx.next() => {
                     let Some(packet) = packet else { break };
                     (packet.unwrap(), false)
@@ -134,7 +134,7 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
                 println!(
                     "[{:9.3}] {} {} {} {:?}",
                     start.elapsed().as_secs_f64(),
-                    if server {
+                    if from_server {
                         format!("{S2C}S → C{S2C:#}")
                     } else {
                         format!("{C2S}C → S{C2S:#}")
@@ -178,6 +178,9 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
 
                         let value = &mut message["1"];
 
+                        let c2s_seed = value["2"].as_u64().to_le_bytes();
+                        let s2c_seed = value["3"].as_u64().to_le_bytes();
+
                         for value in value["5"].as_array_mut() {
                             *value["0"].as_u16_mut() = 0;
                             for value in value["1"].as_array_mut() {
@@ -200,7 +203,17 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
                         )
                         .unwrap();
 
-                        let addr = game::proxy(SocketAddr::new(host.parse().unwrap(), port)).await;
+                        let c2s_key = std::array::from_fn(|i| value["9"].as_array()[i].as_u8());
+                        let s2c_key = std::array::from_fn(|i| value["10"].as_array()[i].as_u8());
+
+                        let addr = game::proxy(
+                            SocketAddr::new(host.parse().unwrap(), port),
+                            &c2s_key,
+                            c2s_seed,
+                            &s2c_key,
+                            s2c_seed,
+                        )
+                        .await;
 
                         *value["6"].as_u16_mut() = addr.port();
 
@@ -221,13 +234,15 @@ pub async fn proxy(addr: SocketAddr, cid: u64, keys: [[u8; 64]; 4]) {
                 }
             }
 
-            if server {
+            if from_server {
                 client_tx.send(bytes).await.unwrap();
             } else {
                 server_tx.send(bytes).await.unwrap();
             }
         }
     });
+
+    server_addr
 }
 
 fn hmac_sha256(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
@@ -258,13 +273,13 @@ fn pow(challenge: &[u8], difficulty: u32) -> u64 {
     unreachable!()
 }
 
-pub struct LobbyCodec {
+pub struct Codec {
     encryptor: Panama,
     decryptor: Panama,
     decrypted: usize,
 }
 
-impl Encoder<Bytes> for LobbyCodec {
+impl Encoder<Bytes> for Codec {
     type Error = io::Error;
 
     fn encode(&mut self, src: Bytes, dst: &mut BytesMut) -> io::Result<()> {
@@ -281,7 +296,7 @@ impl Encoder<Bytes> for LobbyCodec {
     }
 }
 
-impl Decoder for LobbyCodec {
+impl Decoder for Codec {
     type Item = Bytes;
     type Error = io::Error;
 

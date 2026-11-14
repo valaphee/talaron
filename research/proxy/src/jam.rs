@@ -307,22 +307,22 @@ fn decode_value(
         }
         "Struct" => Value::Struct(decode_fields(&field.fields, reader)?),
         "Object" => {
-            let length = reader.read_to::<u32>()? as usize;
-            Value::Object(reader.read_to_vec(length)?)
+            let size = reader.read_to::<u32>()? as usize;
+            Value::Object(reader.read_to_vec(size)?)
         }
         "Array" => {
-            let length = match field.size {
+            let size = match field.size {
                 0 => {
                     reader.byte_align();
                     reader.read_to::<u32>()? as usize
                 }
-                length => length as usize,
+                size => size,
             };
             let type_name = field
                 .type_name
                 .as_deref()
                 .ok_or(io::ErrorKind::InvalidData)?;
-            let values = (0..length)
+            let values = (0..size)
                 .map(|_| decode_value(type_name, field, reader))
                 .collect::<io::Result<Vec<_>>>()?;
 
